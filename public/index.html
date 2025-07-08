@@ -12,26 +12,278 @@ SPDX-License-Identifier: CC0-1.0
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="../styles/styles.css">
+  <script src="https://cdn.tiny.cloud/1/7rhp0m2p7qld3wmto0yr9faja75objt9f5olgkgnk2ez7heh/tinymce/7/tinymce.min.js"
+    referrerpolicy="origin"></script>
   <title>Hello World!</title>
+
 </head>
 
 <body>
+  <div class="root">
+    <div class="soft">
+      <div class="insert">
+      </div>
+      <div class="templates-title">
+        <p>Templates</p>
+      </div>
+      <div class="main-content">
+        <div id="editor">click here</div>
+      </div>
+      <div class="templates-content">
+        <div class="templates-options">
+          <template-select id="custom-template-select"></template-select>
+        </div>
+        <div class="templates-buttons">
+          <button id="add-list" onclick="addTemplate()">+</button>
+          <button onclick="deleteTemplate()">-</button>
+        </div>
+        <div class="templates-sub-title">
+          <p>Edit Template</p>
+        </div>
+        <div class="templates-selected-item">
+          <template-display></template-display>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="../src/components/TemplateSelect.js"></script>
+  <script type="module" src="../src/components/TemplateDisplay.js"></script>
+  <script type="module">
+    import { TemplateManager } from "../src/TemplateManager.js"
+    window.templateManager = TemplateManager
+  </script>
+  <script>
+    const select = document.getElementById("custom-template-select")
 
-  <h1>Web Component - Boilerplate & Helloworld</h1>
+    tinymce.PluginManager.add("working_select", function (editor) {
+      editor.ui.registry.addButton("working_select", {
+        text: "Insert Select",
+        onAction: function () {
+          const selectId = "tinymce-select" + Date.now();
 
-  Code Snippet:
-  <pre><code>
-    &lt;hello-world title="Hello World!"&gt;&lt;/hello-world&gt;
+          const selectHtml = `
+            <select id="${selectId}" 
+                    style="width: 150px; padding: 5px; margin: 5px;"
+                    onmousedown="event.stopPropagation()"
+                    class="working_select tinymce-working-select"
+                    onchange="this.setAttribute('data-value', this.value)">
+            </select>
+          `
 
-    &lt;script src="webcomp-boilerplate.js"&gt;&lt;/script&gt;
-  </code></pre>
+          subs()
+          const templates = window.templateManager.getTemplates()
+          editor.insertContent(selectHtml)
+        }
+      })
+    })
+
+    function setOptionState(key, value) {
+      window.templateManager.setselectOptionState(key, value)
+    }
+
+    function setTemp(key, data) {
+      window.templateManager.changeTemplate(key, data)
+    }
+
+    function getSelected(callback) {
+      window.templateManager.getSelected(callback)
+    }
+
+    function addTemplate() {
+      window.templateManager.addTemplate()
+    }
+
+    function deleteTemplate() {
+      window.templateManager.deleteTemplate()
+      const templates = window.templateManager.getTemplates()
+      updateAllSelects(templates)
+    }
+
+    function subs() {
+      window.templateManager.subs((templates) => {
+        setTimeout(() => {
+          updateAllSelects(templates);
+        }, 0);
+      });
+    }
+
+    function saveEditorContent(editor) {
+      const html = editor.getContent()
+      let selected
+      getSelected((template) => selected = template)
+      if (selected) {
+        setTemp(selected.key, { value: html })
+      }
+    }
+
+    function checkEditorState(editor) {
+      const hasTemplates = window.templateManager.getTemplates().size > 0
+      const hasSelectedTemplate = Boolean(window.templateManager.selectedTemplate)
+
+      if (hasTemplates && hasSelectedTemplate) {
+        editor.mode.set('design')
+      } else {
+        editor.mode.set('readonly')
+      }
+    }
 
 
-  Output:
-  <!-- Set the attribute "title" and refer to it as property in JS -->
-  <hello-world title="Hello World!" />
-  <script src="webcomp-boilerplate.js"></script>
+    tinymce.init({
+      menubar: false,
+      branding: false,
+      content_css: false,
+      statusbar: false,
+      quickbars_selection_toolbar: false,
+      quickbars_insert_toolbar: false,
+      selector: "#editor",
+      plugins: "working_select",
+      toolbar: "working_select",
+      valid_elements: "*[*]",
+      valid_children: "+body[select]",
+      cleanup: false,
+      verify_html: false,
+      setup: function (editor) {
+        editor.on("init", () => {
+          editor.mode.set('readonly')
+          window.templateManager.getSelected((template) => {
+            if (template) {
+              editor.mode.set('design')
+              const templates = window.templateManager.getTemplates()
+              selectedOptions = window.templateManager.getselectOptinState()
+              editor.setContent(template.value)
+              const body = editor.getBody()
+              const nodes = body.querySelectorAll("select.working_select")
+              nodes.forEach(node => {
+                const prevSelectValue = node.getAttribute("data-value")
+                const id = node.id
+                if (prevSelectValue && node.querySelector(`option[value="${prevSelectValue}"]`)) {
+                  if (!templates.has(prevSelectValue)) {
+                    replaceSelectWithError(node)
+                  }
+                  node.value = prevSelectValue
+                } else if (selectedOptions && selectedOptions.get(id)) {
+                  node.value = selectedOptions.get(id)
+                }
+              })
+            }
+            subs()
+          })
 
+          editor.getBody().addEventListener("change", (event) => {
+            const target = event.target;
+            if (target && target.matches("select.working_select")) {
+              const selectedValue = target.value;
+              const selectId = target.id;
+
+              if (selectId) {
+                setOptionState(selectId, selectedValue);
+              }
+            }
+          })
+          subs()
+        })
+
+        editor.on("keydown", (e) => {
+          if (e.key === "Enter") {
+            e.preventDefault()
+            if (hasTemplateErrors(editor)) {
+              return;
+            }
+            saveEditorContent(editor)
+
+            editor.selection.collapse()
+            editor.getWin().blur()
+
+
+            setTimeout(() => {
+              document.activeElement.blur()
+              document.body.focus()
+            }, 0)
+          }
+        });
+        editor.on("blur", () => {
+          if (hasTemplateErrors(editor)) {
+            return
+          }
+          saveEditorContent(editor)
+
+
+        });
+        editor.on("change", () => {
+          console.log("change")
+        })
+      },
+      content_style: `
+        .tinymce-working-select {
+          background: white;
+          border: 1px solid #ccc;
+          font-family: Arial;
+          -webkit-appearance: menulist;
+        }
+        .tinymce-working-select:focus {
+          outline: 2px solid #6e9fff;
+        }
+      `
+    })
+
+    function hasTemplateErrors(editor) {
+      if (!editor) return false;
+
+      return editor.getBody().querySelector("span.error-text")
+    }
+
+    function replaceSelectWithError(selectElement) {
+      const errorSpan = document.createElement("span")
+      errorSpan.textContent = "ERROR"
+      errorSpan.style.color = "red"
+      errorSpan.style.marginLeft = "5px"
+      errorSpan.className = "error-text"
+
+      selectElement.parentNode.replaceChild(errorSpan, selectElement)
+    }
+
+    function shouldUpdateSelect(selectEl, newOptions) {
+      const currentOptions = Array.from(selectEl.options).map(o => o.value)
+      return currentOptions.length !== newOptions.size ||
+        !currentOptions.every(val => newOptions.has(val))
+    }
+
+    function updateAllSelects(templates) {
+      const selectedOptions = window.templateManager.getselectOptinState()
+      const templatesToDisplay = []
+      templates.forEach((value, key) => templatesToDisplay.push(`<option value="${key}">${key}</option>`))
+
+      const editor = tinymce.get("editor")
+      const selects = editor.getBody().querySelectorAll("select.working_select")
+      const templateKeys = new Set(templates.keys())
+
+      const optionsHTML = templatesToDisplay.join("")
+      selects.forEach(selectEl => {
+        if (!shouldUpdateSelect(selectEl, templateKeys)) {
+          return
+        }
+        if (selectEl.querySelector("option.error")) {
+          return
+        }
+        const prevSelectValue = selectEl.getAttribute("data-value")
+        const id = selectEl.id
+        const newSelect = selectEl.cloneNode(false);
+        newSelect.innerHTML = optionsHTML
+
+        if (prevSelectValue && newSelect.querySelector(`option[value="${prevSelectValue}"]`)) {
+          newSelect.value = prevSelectValue
+        } else if (selectedOptions && selectedOptions.get(id)) {
+          newSelect.value = selectedOptions.get(id)
+        }
+
+        selectEl.parentNode.replaceChild(newSelect, selectEl)
+      })
+    }
+  </script>
+  <script>
+
+  </script>
 </body>
 
 </html>

@@ -25,7 +25,7 @@ class HelloWorld extends HTMLElement {
     // Override from HTMLElement
     // Do not use setters here, because you might end up with an endless loop
     attributeChangedCallback(propName, oldValue, newValue) {
-        console.log(`Changing "${propName}" from "${oldValue}" to "${newValue}"`);
+        // console.log(`Changing "${propName}" from "${oldValue}" to "${newValue}"`);
         if (propName === "title") {
             this.render();
         }
